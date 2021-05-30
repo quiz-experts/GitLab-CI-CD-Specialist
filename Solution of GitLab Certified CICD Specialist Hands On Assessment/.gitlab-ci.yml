@@ -1,0 +1,67 @@
+stages:
+    - test
+    - build
+    - review
+    - deploy
+variables: 
+  DEFAULT_GLOBAL_VARIABLE: "Some global variable value"   
+test job:
+    stage: test
+    script:
+        - echo "I am a unit test!"
+deploy review:
+  stage: review
+  script:
+    - echo "Do your average deploy here"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+      when: never
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - when: always
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+deploy release:
+  stage: deploy
+  script:
+    - echo "Deploy to a production environment"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME != "master" && $CI_COMMIT_TAG'
+      when: manual
+  environment:
+    name: production
+deploy staging:
+  stage: deploy
+  script:
+    - echo "Deploy to a staging environment"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+      when: always
+    - when: never
+  environment:
+    name: staging
+build app:
+  image: golang:latest
+  stage: build
+  script:
+    - go build -o app main.go
+  artifacts:
+    paths:
+      - app
+    expire_in: 1 hour
+build image:
+  image: docker:stable
+  stage: build
+  variables:
+    CONTAINER_BUILD_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  tags:
+    - docker_tag
+  before_script:
+    - docker info
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CONTAINER_BUILD_IMAGE .
+    - docker push $CONTAINER_BUILD_IMAGE
+  when: manual
+include:
+  template: Security/SAST.gitlab-ci.yml
